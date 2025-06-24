@@ -1,20 +1,26 @@
+import time
 import yfinance as yf
 import pandas as pd
 
-def fetch_fundamentals(ticker):
-    """
-    Fetch P/E and P/B ratio for a given ticker symbol from Yahoo Finance.
-    Returns a dictionary: {"PE": value, "PB": value}
-    """
-    try:
-        stock = yf.Ticker(ticker)
-        info = stock.info
-        pe = info.get("trailingPE", None)
-        pb = info.get("priceToBook", None)
-        return {"PE": pe, "PB": pb}
-    except Exception as e:
-        print(f"Error fetching fundamentals for {ticker}: {e}")
-        return {"PE": None, "PB": None}
+def fetch_fundamentals(symbol, max_retries=3, delay=2):
+    for attempt in range(max_retries):
+        try:
+            ticker = yf.Ticker(symbol)
+            info = ticker.info
+            pe = info.get("trailingPE")
+            pb = info.get("priceToBook")
+            if pe is None or pb is None:
+                print(f"Warning: Missing PE or PB for {symbol}")
+            return {"PE": pe, "PB": pb}
+        except Exception as e:
+            print(f"Error fetching fundamentals for {symbol}: {e}")
+            if "Too Many Requests" in str(e):
+                print(f"Sleeping {delay} seconds due to rate limit...")
+                time.sleep(delay)
+            else:
+                break
+    # Fallback if still failing
+    return {"PE": None, "PB": None}
     
 def get_yahoo_ticker(row):
         exch = str(row.get("exchange", "")).upper()

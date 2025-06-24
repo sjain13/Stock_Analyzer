@@ -15,6 +15,38 @@ def create_table_if_not_exists():
         Base.metadata.create_all(engine)
     else:
         print("Table instrument_signal already exists.")
+
+def get_instruments_for_cal(save_to_file: bool = True, file_path: str = "data/common_instruments.csv"):
+    """
+    Retrieves all unique instrument IDs (with tradingsymbol and name) that are common
+    between 'instrument' and 'instrument_signal' tables (i.e., have signals).
+
+    Args:
+        save_to_file (bool): Whether to save the resulting DataFrame to CSV.
+        file_path (str): Path to save the CSV file.
+
+    Returns:
+        df (pd.DataFrame): DataFrame with instrument_id, tradingsymbol, name.
+        instrument_ids (list): List of instrument IDs.
+    """
+    query = """
+        SELECT DISTINCT i.id AS instrument_id, i.tradingsymbol, i.name
+        FROM instrument i
+        INNER JOIN instrument_signal s ON i.id = s.instrument_id;
+    """
+    try:
+        df = pd.read_sql(query, engine)
+        if df.empty:
+            print("No common instruments found.")
+            return df, []
+        if save_to_file:
+            df.to_csv(file_path, index=False)
+            print(f"Saved common instrument list to {file_path}")
+        instrument_ids = df['instrument_id'].tolist()
+        return df, instrument_ids
+    except Exception as e:
+        print("Error fetching instruments for calculation:", e)
+        return pd.DataFrame(), []
         
 def get_price_data(instrument_id, n_days=120):
     """
@@ -53,7 +85,6 @@ def save_signal_to_db(signal_data):
         new_signal = InstrumentSignal(**signal_data)
         session.add(new_signal)
         session.commit()
-        print(f"Signal saved with id: {new_signal.id}")
     except SQLAlchemyError as e:
         print("Error saving signal:", e)
         session.rollback()
