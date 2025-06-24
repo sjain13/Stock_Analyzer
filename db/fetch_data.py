@@ -1,0 +1,66 @@
+from sqlalchemy import inspect
+import pandas as pd
+from db.db_connect import SessionLocal, engine
+from models import InstrumentPrice
+from models import InstrumentSignal
+from sqlalchemy.exc import SQLAlchemyError
+from models import Base
+
+
+def create_table_if_not_exists():
+    # Only needed if you're running outside a migration system (for dev/experiments)
+    inspector = inspect(engine)
+    if 'instrument_signal_data' not in inspector.get_table_names():
+        print("Table instrument_signal not found. Creating table...")
+        Base.metadata.create_all(engine)
+    else:
+        print("Table instrument_signal already exists.")
+        
+def get_price_data(instrument_id, n_days=120):
+    """
+    Fetches last n_days of price data for a given instrument_id from instrument_price table.
+    Returns a pandas DataFrame with columns: date, close.
+    """
+    session = SessionLocal()
+    try:
+        prices = (
+            session.query(InstrumentPrice)
+            .filter(InstrumentPrice.instrument_id == instrument_id)
+            .order_by(InstrumentPrice.updated_date_time.desc())
+            .limit(n_days)
+            .all()
+        )
+        if not prices:
+            return None
+        prices = prices[::-1]  # chronological order
+        df = pd.DataFrame([{
+            "date": p.updated_date_time,
+            "close": float(p.closing_price),
+            "volume": p.volume if p.volume is not None else 0
+        } for p in prices])
+        return df
+    finally:
+        session.close()
+
+def save_signal_to_db(signal_data):
+    """
+    Saves a signal entry to the instrument_signal table.
+    signal_data: dict with keys matching InstrumentSignal columns.
+    Example keys: instrument_signal, created_date, extra_info, instrument_id, closing_price, daily_20_ma, daily_50_ma, etc.
+    """
+    session = SessionLocal()
+    try:
+        new_signal = InstrumentSignal(**signal_data)
+        session.add(new_signal)
+        session.commit()
+        print(f"Signal saved with id: {new_signal.id}")
+    except SQLAlchemyError as e:
+        print("Error saving signal:", e)
+        session.rollback()
+    finally:
+        session.close()
+
+def load_instruments():
+    query = "SELECT * FROM instrument"
+    df = pd.read_sql(query, engine)
+    return df

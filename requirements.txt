@@ -1,0 +1,9 @@
+pandas
+mysql-connector-python
+pandas-ta
+SQLAlchemy
+pymysql
+yfinance
+keras
+scikit-learn
+tensorflow==2.13.1
