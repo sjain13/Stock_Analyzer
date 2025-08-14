@@ -41,7 +41,7 @@ class InstrumentPrice(Base):
     instrument = relationship("Instrument", back_populates="prices")
 
 class InstrumentSignal(Base):
-    __tablename__ = 'instrument_signal_data'
+    __tablename__ = 'instrument_signal'
     id = Column(Integer, primary_key=True, autoincrement=True)
     instrument_signal = Column(String(50), nullable=False)
     created_date = Column(DateTime, nullable=False)
@@ -57,5 +57,8 @@ class InstrumentSignal(Base):
     daily_50_ma = Column(DECIMAL(10,2))
     support_20 = Column(DECIMAL(10,2))
     resist_20 = Column(DECIMAL(10,2)) 
+    rsi = Column(DECIMAL(10,2))
+    pe = Column(DECIMAL(10,2))
+    pb = Column(DECIMAL(10,2))
 
     instrument = relationship("Instrument", back_populates="signals")

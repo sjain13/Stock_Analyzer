@@ -7,3 +7,4 @@ yfinance
 keras
 scikit-learn
 tensorflow==2.13.1
+fastapi

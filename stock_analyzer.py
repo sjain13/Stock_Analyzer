@@ -2,7 +2,7 @@
 
 import pandas as pd
 from db.fetch_data import create_table_if_not_exists, save_signal_to_db, load_instruments,get_instruments_for_cal
-from db.fundamentals import fetch_fundamentals, get_yahoo_ticker
+from db.fundamentals import fetch_fundamentals, get_yahoo_ticker, load_cache, save_cache
 from indicators.indicator_engine import get_indicators_for_instrument
 from signals.signals_logic import generate_signal
 
@@ -16,6 +16,8 @@ def main(instrument_mapping):
 
     # Collect all ML DataFrames here
     ml_dfs = []
+
+    print(df_instruments.size)
 
     # Step 2: Loop over all instrument IDs
     for idx, row in df_instruments.iterrows():
@@ -36,13 +38,23 @@ def main(instrument_mapping):
             sig, rea = generate_signal(df.iloc[i], df.iloc[i-1])
             signals.append(sig)
             reasons.append(rea)
-            signal_data = build_dict_for_saving_data(instrument_id, sig, rea, df.iloc[i])
-            save_signal_to_db(signal_data)
+            #signal_data = build_dict_for_saving_data(instrument_id, sig, rea, df.iloc[i])
+            #save_signal_to_db(signal_data)
                 
         df['Signal'] = signals
         df['Reason'] = reasons
 
-        df = add_fundamentals_and_filtered_signals(df, instrument_id, instrument_mapping)
+        fund_cache = load_cache() 
+
+        df = add_fundamentals_and_filtered_signals(df, instrument_id, instrument_mapping, fund_cache=fund_cache)
+
+        save_cache(fund_cache)
+
+        for i in range(1, len(df)):
+            sig = df.iloc[i]['Signal']
+            rea = df.iloc[i]['Reason']
+            signal_data = build_dict_for_saving_data(instrument_id, sig, rea, df.iloc[i])
+            save_signal_to_db(signal_data)
 
         df_ml = add_ml_labels(df)
         # Add instrument_id, tradingsymbol, and name to the DataFrame for context
@@ -83,10 +95,13 @@ def build_dict_for_saving_data(instrument_id, sig, rea, row):
             "daily_50_ma": float(row["DMA_50"]) if "DMA_50" in row and pd.notnull(row["DMA_50"]) else None,
             "support_20": float(row["SUPPORT_20"]) if "SUPPORT_20" in row and pd.notnull(row["SUPPORT_20"]) else None,
             "resist_20": float(row["RESIST_20"]) if "RESIST_20" in row and pd.notnull(row["RESIST_20"]) else None,
+            "rsi": float(row["RSI_14"]) if "RSI_14" in row and pd.notnull(row["RSI_14"]) else None,
+            "pe": float(row["PE"]) if "PE" in row and pd.notnull(row["PE"]) else None,
+            "pb": float(row["PB"]) if "PB" in row and pd.notnull(row["PB"]) else None,
             # Add more fields if needed
         }
 
-def add_fundamentals_and_filtered_signals(df, instrument_id, instrument_mapping):
+def add_fundamentals_and_filtered_signals(df, instrument_id, instrument_mapping, fund_cache=None):
     """
     Adds PE, PB fundamentals and filtered signals (using technical and fundamentals) to the dataframe.
     Returns: DataFrame with added columns ['PE', 'PB', 'Filtered_Signal', 'Filtered_Reason']
@@ -96,12 +111,18 @@ def add_fundamentals_and_filtered_signals(df, instrument_id, instrument_mapping)
     pe, pb = None, None
     if symbol:
         print(f"Instrument ID: {instrument_id}, Yahoo symbol: {symbol}")
-        fundamentals = fetch_fundamentals(symbol)
-        print(f"Fetched fundamentals for {symbol}: {fundamentals}")
+        fundamentals = fetch_fundamentals(symbol, cache=fund_cache)
         pe = fundamentals.get("PE", None)
         pb = fundamentals.get("PB", None)
-    df['PE'] = pe
-    df['PB'] = pb
+        # PRINT PE/PB, handling None cleanly
+        print(f"   -> PE: {pe if pe is not None else 'N/A'}   PB: {pb if pb is not None else 'N/A'}")
+    else:
+        print(f"Instrument ID: {instrument_id} has no mapped Yahoo symbol. PE/PB skipped.")
+
+
+    # --- 2. Assign to all rows at once (vectorized)
+    df["PE"] = pe
+    df["PB"] = pb
 
     # Filter signals using fundamentals
     filtered_signals = []

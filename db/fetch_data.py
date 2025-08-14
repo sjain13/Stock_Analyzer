@@ -16,10 +16,9 @@ def create_table_if_not_exists():
     else:
         print("Table instrument_signal already exists.")
 
-def get_instruments_for_cal(save_to_file: bool = True, file_path: str = "data/common_instruments.csv"):
+def get_instruments_for_cal(save_to_file: bool = False, file_path: str = "data/all_instruments.csv"):
     """
-    Retrieves all unique instrument IDs (with tradingsymbol and name) that are common
-    between 'instrument' and 'instrument_signal' tables (i.e., have signals).
+    Retrieves all unique instrument IDs, tradingsymbol, and name from the 'instrument' table.
 
     Args:
         save_to_file (bool): Whether to save the resulting DataFrame to CSV.
@@ -30,22 +29,26 @@ def get_instruments_for_cal(save_to_file: bool = True, file_path: str = "data/co
         instrument_ids (list): List of instrument IDs.
     """
     query = """
-        SELECT DISTINCT i.id AS instrument_id, i.tradingsymbol, i.name
-        FROM instrument i
-        INNER JOIN instrument_signal s ON i.id = s.instrument_id;
+        SELECT id AS instrument_id, tradingsymbol, name
+        FROM instrument
+        ORDER BY tradingsymbol
     """
+
+    print("Get all instruments")
     try:
+        print(save_to_file)
         df = pd.read_sql(query, engine)
         if df.empty:
-            print("No common instruments found.")
+            print("No instruments found.")
             return df, []
         if save_to_file:
             df.to_csv(file_path, index=False)
-            print(f"Saved common instrument list to {file_path}")
+            print("file Path", file_path)
+            print(f"Saved instrument list to {file_path}")
         instrument_ids = df['instrument_id'].tolist()
         return df, instrument_ids
     except Exception as e:
-        print("Error fetching instruments for calculation:", e)
+        print("Error fetching instruments:", e)
         return pd.DataFrame(), []
         
 def get_price_data(instrument_id, n_days=120):

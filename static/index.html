@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Stock Analyzer Dashboard</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    body { font-family: 'Segoe UI', Arial, sans-serif; background: #f5f6fa; margin: 0; padding: 2em;}
+    .main-container {
+      width: 80vw;
+      max-width: none;
+      margin: 2em auto;
+      background: #fff;
+      border-radius: 1.2em;
+      box-shadow: 0 8px 32px #b3b3b3;
+      padding: 1em 2em 2em 2em;
+    }
+    .flex-row { display: flex; gap: 2em; flex-wrap: wrap;}
+    .panel {
+      border-radius: 1em;
+      min-width: 350px;
+      background: #fcfcfc;
+      flex: 2 1 400px;
+      padding: 1.2em 1.6em;
+      display: flex;
+      flex-direction: column;
+    }
+    .right-panel {
+      flex: 1.6 1 420px;
+      min-width: 410px;
+      background: #f7faff;
+      box-shadow: 0 2px 12px #dde9f6;
+      padding-bottom: 1.5em;
+      display: flex;
+      flex-direction: column;
+      gap: 1.5em;
+    }
+    .centered-pie {
+      width: 100%;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+    .stock-title { font-size: 1.3em; margin-bottom: 0.4em;}
+    .stock-price { font-size: 2.7em; font-weight: bold; color: #2856b6;}
+    .price-change { font-size: 1.2em; font-weight: bold; margin-left: 0.5em; }
+    .price-up { color: #28c76f; }
+    .price-down { color: #ea5455; }
+    .summary-table { width: 100%; margin-top: 2em; margin-bottom: 2em; border-collapse: collapse;}
+    .summary-table td { padding: 0.45em 1.3em; font-size: 1em; }
+    .summary-label { color: #687b9e; }
+    .summary-value { font-weight: 500; }
+    .chart-container { height: 260px; margin-bottom: 2em; }
+    .stock-input { padding: 0.5em; border-radius: 0.7em; border: 1px solid #bbb; margin-bottom: 1.5em; width: 250px;}
+    button { padding: 0.6em 1.5em; border-radius: 1em; border: none; background: #2856b6; color: white; font-weight: bold; cursor: pointer;}
+    button:active { background: #123166; }
+    .prediction-card { margin-top: 1.4em; padding: 1.4em 1em; background: #e6ffe9; border-radius: 1em; font-size: 1.1em;}
+    .loading { color: #666; }
+    .right-panel h3 { margin-top: 0.4em; }
+    .gauge-container {
+      width: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center;
+      margin-bottom: 1em; margin-top: 1.2em;
+      display: none;  /* hide by default */
+      transition: opacity 0.2s;
+    }
+    #gaugeCanvas {
+      width: 230px !important; height: 140px !important;
+    }
+    #gaugeLabel {
+      position: absolute;
+      left: 50%;
+      top: 39%;
+      transform: translate(-50%, -50%);
+      font-size: 2.2em;
+      font-weight: bold;
+      color: #222;
+      text-shadow: 0 2px 12px #fff, 0 1px 0 #fff;
+      letter-spacing: 2px;
+      pointer-events: none;
+    }
+    .gauge-wrapper {
+      position: relative;
+      width: 230px;
+      height: 140px;
+    }
+    .features-card {
+      margin-top: 1.2em;
+      background: #fff;
+      border-radius: 1.2em;
+      box-shadow: 0 4px 18px #e3ebfa;
+      padding: 1em 0.7em 1em 0.7em;
+      max-height: 265px;
+      overflow-y: auto;
+    }
+    .features-card table {
+      width: 100%; border-collapse: collapse; font-size: 0.97em;
+    }
+    .features-card th, .features-card td {
+      border: 1px solid #e5ecfc;
+      padding: 0.3em 0.4em;
+      text-align: center;
+    }
+    .features-card th {
+      background: #f4f7fe; font-weight: 600; position: sticky; top: 0; z-index: 1;
+    }
+    .features-title {
+      font-weight: bold; margin-bottom: 0.4em; font-size: 1.05em; color: #2267d0;
+    }
+    @media (max-width: 1000px) {
+      .flex-row { flex-direction: column;}
+      .main-container { width: 99vw; }
+      .right-panel, .panel { min-width: 0; max-width: 100%; }
+    }
+  </style>
+</head>
+<body>
+<div class="main-container">
+  <div style="display:flex;justify-content:space-between;align-items:center;">
+    <div>
+      <input class="stock-input" id="stockInput" placeholder="Enter Stock Name (e.g. TATAMOTORS)" />
+      <button onclick="searchStock()">Search</button>
+    </div>
+    <div id="stock-date" style="font-size:1em; color:#999;"></div>
+  </div>
+  <div class="flex-row" style="margin-top:2em;">
+    <div class="panel">
+      <div id="stock-title" class="stock-title">Market Summary &gt; Tata Motors Ltd</div>
+      <span id="stock-price" class="stock-price"></span>
+      <span id="price-change" class="price-change"></span>
+      <div id="last-update" style="font-size:0.95em;color:#6a7fa5; margin-bottom:1em;">Demo data</div>
+      <div class="chart-container"><canvas id="priceChart" width="720" height="220"></canvas></div>
+      <table class="summary-table">
+        <tr>
+          <td class="summary-label">Open</td>
+          <td class="summary-value" id="open"></td>
+          <td class="summary-label">High</td>
+          <td class="summary-value" id="high"></td>
+          <td class="summary-label">Low</td>
+          <td class="summary-value" id="low"></td>
+        </tr>
+        <tr>
+          <td class="summary-label">P/E ratio</td>
+          <td class="summary-value" id="pe"></td>
+          <td class="summary-label">Div yield</td>
+          <td class="summary-value" id="divyield"></td>
+          <td class="summary-label">Mkt cap</td>
+          <td class="summary-value" id="mktcap"></td>
+        </tr>
+        <tr>
+          <td class="summary-label">52-wk high</td>
+          <td class="summary-value" id="wkhigh"></td>
+          <td class="summary-label">52-wk low</td>
+          <td class="summary-value" id="wklow"></td>
+          <td class="summary-label">Prev close</td>
+          <td class="summary-value" id="prevclose"></td>
+        </tr>
+      </table>
+      <!-- Last 10 Days Features Card (LEFT SIDE) -->
+      <div class="features-card" id="featuresCard" style="display:none">
+        <div class="features-title">Last 10 Days Features</div>
+        <div id="featuresTable"></div>
+      </div>
+    </div>
+    <div class="right-panel">
+      <h3>Prediction Signal</h3>
+      <button id="predictBtn" style="margin-bottom:1em;display:none;" onclick="predict()">Get Prediction</button>
+      <div class="gauge-container" id="gaugeContainer">
+        <div class="gauge-wrapper">
+          <canvas id="gaugeCanvas" width="230" height="140"></canvas>
+          <div id="gaugeLabel">--%</div>
+        </div>
+      </div>
+      <div id="predictionResult"></div>
+      <h3 style="margin-top:2em; text-align:center;">Feature Mix</h3>
+      <div class="centered-pie">
+        <canvas id="pieChart" width="340" height="220"></canvas>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+const FEATURES = ["close", "volume", "RSI_14", "DMA_20", "DMA_50", "DMA_100", "SUPPORT_20", "RESIST_20", "PE", "PB"];
+let dummyData = [];
+let lastQueriedStock = "";
+let pieChart, priceChart, gaugeChart;
+
+// Demo: Randomized summary stats for each "stock"
+function generateDummyData(stock) {
+  let base = Math.abs(stock.split('').reduce((a,c)=>a+c.charCodeAt(0),0)) % 1000;
+  let arr = [];
+  for(let i=0;i<20;i++) {
+    arr.push({
+      close: +(base+Math.random()*100).toFixed(2),
+      volume: Math.floor(100000+Math.random()*900000),
+      RSI_14: +(30+Math.random()*40).toFixed(2),
+      DMA_20: +(base+Math.random()*10).toFixed(2),
+      DMA_50: +(base+Math.random()*20).toFixed(2),
+      DMA_100: +(base+Math.random()*30).toFixed(2),
+      SUPPORT_20: +(base-10+Math.random()*20).toFixed(2),
+      RESIST_20: +(base+10+Math.random()*30).toFixed(2),
+      PE: +(10+Math.random()*30).toFixed(2),
+      PB: +(1+Math.random()*10).toFixed(2),
+    });
+  }
+  return arr;
+}
+
+function getSummaryStats(data) {
+  // Demo only: Real implementation would use your database/finance API!
+  return {
+    open: data[0].close,
+    high: Math.max(...data.map(x => x.close)),
+    low: Math.min(...data.map(x => x.close)),
+    pe: data[19].PE,
+    divyield: (Math.random()*1.5).toFixed(2)+'%',
+    mktcap: (2.5+Math.random()).toFixed(2)+'L Cr',
+    wkhigh: (Math.max(...data.map(x => x.close)) + 200).toFixed(2),
+    wklow: (Math.min(...data.map(x => x.close)) - 100).toFixed(2),
+    prevclose: data[18].close,
+  }
+}
+
+function showSummary(data, stock) {
+  // Set all the summary fields
+  let stats = getSummaryStats(data);
+  document.getElementById('stock-title').textContent = "Market Summary > " + stock;
+  document.getElementById('stock-price').textContent = data[19].close + " INR";
+  // Calculate change and show up/down
+  let change = (data[19].close - data[18].close).toFixed(2);
+  let changePct = ((data[19].close-data[18].close)/data[18].close*100).toFixed(2);
+  let changeEl = document.getElementById('price-change');
+  if (change >= 0) {
+    changeEl.textContent = `+${change} (${changePct}%) ↑ today`;
+    changeEl.className = "price-change price-up";
+  } else {
+    changeEl.textContent = `${change} (${changePct}%) ↓ today`;
+    changeEl.className = "price-change price-down";
+  }
+  document.getElementById('stock-date').textContent = new Date().toLocaleString('en-IN',{dateStyle:'medium',timeStyle:'short'}) + " IST";
+  document.getElementById('open').textContent = stats.open;
+  document.getElementById('high').textContent = stats.high;
+  document.getElementById('low').textContent = stats.low;
+  document.getElementById('pe').textContent = stats.pe;
+  document.getElementById('divyield').textContent = stats.divyield;
+  document.getElementById('mktcap').textContent = stats.mktcap;
+  document.getElementById('wkhigh').textContent = stats.wkhigh;
+  document.getElementById('wklow').textContent = stats.wklow;
+  document.getElementById('prevclose').textContent = stats.prevclose;
+}
+
+function renderPieChart(data) {
+  // Example: Pie chart for PE, PB, RSI_14 for the latest day
+  let latest = data[19];
+  let pieData = [
+    latest ? latest.PE : 1,
+    latest ? latest.PB : 1,
+    latest ? latest.RSI_14 : 1
+  ];
+  let pieLabels = ["PE", "PB", "RSI_14"];
+  let pieColors = ["#5B8DEE", "#39DA8A", "#FF5B5C"];
+  if(pieChart) pieChart.destroy();
+  pieChart = new Chart(document.getElementById('pieChart').getContext('2d'), {
+    type: 'pie',
+    data: {
+      labels: pieLabels,
+      datasets: [{
+        data: pieData,
+        backgroundColor: pieColors
+      }]
+    },
+    options: { responsive: false }
+  });
+}
+
+function renderPriceChart(data) {
+  let labels = Array.from({length: 20}, (_, i) => `Day ${i+1}`);
+  let closeData = data.map(row => row.close);
+  if(priceChart) priceChart.destroy();
+  priceChart = new Chart(document.getElementById('priceChart').getContext('2d'), {
+    type: 'line',
+    data: {
+      labels: labels,
+      datasets: [{
+        label: 'Close Price',
+        data: closeData,
+        fill: true,
+        borderColor: '#2856b6',
+        backgroundColor: 'rgba(40,86,182,0.08)',
+        pointRadius: 2,
+        tension: 0.2
+      }]
+    },
+    options: {
+      responsive: false,
+      plugins: { legend: { display: false } },
+      scales: { x: { display: false }, y: { grid: {color: "#d7e0f5"} } }
+    }
+  });
+}
+
+// Render last 10 days features in the LEFT card with actual dates
+function renderFeaturesCard(data) {
+  if (!data || data.length < 10) {
+    document.getElementById('featuresCard').style.display = "none";
+    document.getElementById('featuresTable').innerHTML = "";
+    return;
+  }
+  // Generate last 10 dates (from today, backwards)
+  const today = new Date();
+  const dateArr = [];
+  for (let i = 9; i >= 0; i--) {
+    const d = new Date(today);
+    d.setDate(today.getDate() - i);
+    // Format: DD Mon (e.g., 19 Jul)
+    dateArr.push(d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }));
+  }
+  let last10 = data.slice(-10);
+  let html = `<table><tr><th>Date</th>${FEATURES.map(f => `<th>${f}</th>`).join('')}</tr>`;
+  last10.forEach((row, i) => {
+    html += `<tr><td>${dateArr[i]}</td>`;
+    FEATURES.forEach(f => html += `<td>${row[f]}</td>`);
+    html += '</tr>';
+  });
+  html += '</table>';
+  document.getElementById('featuresTable').innerHTML = html;
+  document.getElementById('featuresCard').style.display = "block";
+}
+
+function searchStock() {
+  let stock = document.getElementById('stockInput').value.trim();
+  if (!stock) { alert("Enter stock name!"); return; }
+  lastQueriedStock = stock;
+  dummyData = generateDummyData(stock);
+  showSummary(dummyData, stock);
+  renderPieChart(dummyData);
+  renderPriceChart(dummyData);
+  renderFeaturesCard(dummyData); // <<<<<< on left now
+  document.getElementById('predictBtn').style.display = 'inline-block';
+  document.getElementById('predictionResult').innerHTML = '';
+  // Hide gauge on new search
+  document.getElementById('gaugeContainer').style.display = "none";
+  renderGauge(null);
+}
+
+// Gauge (hidden by default, shown after predict)
+function renderGauge(confidence) {
+  let percent = confidence !== null && confidence !== undefined
+    ? Math.round(confidence * 100)
+    : '--';
+  let color = "#d4dae5";
+  if (confidence !== null && confidence !== undefined) {
+    if (confidence < 0.5) color = '#ff5b5c'; // red
+    else if (confidence <= 0.8) color = '#ffc700'; // yellow
+    else color = '#2196f3'; // blue
+  }
+  // Chart.js draw
+  if (gaugeChart) gaugeChart.destroy();
+  gaugeChart = new Chart(document.getElementById('gaugeCanvas').getContext('2d'), {
+    type: 'doughnut',
+    data: {
+      datasets: [{
+        data: [confidence !== null && confidence !== undefined ? confidence : 0, confidence !== null && confidence !== undefined ? 1-confidence : 1, 0.2],
+        backgroundColor: [color, '#e3e6ea', 'rgba(0,0,0,0)'],
+        borderWidth: 0,
+        cutout: '70%',
+        circumference: 180,
+        rotation: 270
+      }]
+    },
+    options: {
+      responsive: false,
+      plugins: { legend: {display: false}},
+      tooltips: {enabled: false}
+    }
+  });
+  document.getElementById('gaugeLabel').innerText = percent + "%";
+}
+
+async function predict() {
+  document.getElementById('predictionResult').innerHTML = '<span class="loading">Predicting...</span>';
+  try {
+    let body = {
+      stock_name: lastQueriedStock,
+      features: dummyData
+    };
+    let resp = await fetch('/predict', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(body)
+    });
+    let result = await resp.json();
+    if (resp.ok) {
+      document.getElementById('predictionResult').innerHTML =
+        `<div class="prediction-card">
+          <b>Prediction:</b> ${result.prediction}<br>
+          <b>Confidence:</b> ${(result.confidence*100).toFixed(2)}%<br>
+          <b>Stock:</b> ${result.stock_name}
+        </div>`;
+      // Show gauge with updated value
+      document.getElementById('gaugeContainer').style.display = "flex";
+      renderGauge(result.confidence);
+    } else {
+      document.getElementById('predictionResult').innerHTML = `<div style="color:red;">${result.detail}</div>`;
+      document.getElementById('gaugeContainer').style.display = "none";
+      renderGauge(null);
+    }
+  } catch(e) {
+    document.getElementById('predictionResult').innerHTML = `<div style="color:red;">Failed: ${e}</div>`;
+    document.getElementById('gaugeContainer').style.display = "none";
+    renderGauge(null);
+  }
+}
+
+// On page load, initialize gauge and features card with empty state
+window.onload = function() {
+  document.getElementById('gaugeContainer').style.display = "none";
+  renderGauge(null);
+  renderFeaturesCard([]);
+};
+</script>
+</body>
+</html>
